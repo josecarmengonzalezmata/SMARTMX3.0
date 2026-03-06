@@ -1,6 +1,6 @@
 // screens/HomeScreen.js
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Dimensions, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Dimensions, Animated, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -12,6 +12,8 @@ const HomeScreen = ({ navigation }) => {
   const [location, setLocation] = useState(null);
   const [selectedZone, setSelectedZone] = useState(null);
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
+  const [zoneModalVisible, setZoneModalVisible] = useState(false);
+  const [detailZone, setDetailZone] = useState(null);
   
   // Animaciones para las tarjetas
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -53,6 +55,19 @@ const HomeScreen = ({ navigation }) => {
     navigation.navigate(screen);
   };
 
+  const handleViewZoneDetails = (zone) => {
+    if (!zone) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setDetailZone(zone);
+    setZoneModalVisible(true);
+  };
+
+  const closeZoneModal = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setZoneModalVisible(false);
+  };
+
   const freshZones = [
     {
       id: 'deportivo',
@@ -63,7 +78,10 @@ const HomeScreen = ({ navigation }) => {
       status: 'Disponible',
       distance: '200m',
       emergency: true,
-      recycle: true
+      recycle: true,
+      shade: 'Alta',
+      services: 'Bebedero, bancas, wifi',
+      hours: '06:00 - 22:00'
     },
     {
       id: 'parque-madero',
@@ -74,7 +92,10 @@ const HomeScreen = ({ navigation }) => {
       status: 'Disponible',
       distance: '850m',
       emergency: false,
-      recycle: true
+      recycle: true,
+      shade: 'Media',
+      services: 'Juegos, bebederos',
+      hours: '05:30 - 21:30'
     },
     {
       id: 'universidad',
@@ -85,7 +106,10 @@ const HomeScreen = ({ navigation }) => {
       status: 'Alta demanda',
       distance: '1.3km',
       emergency: true,
-      recycle: false
+      recycle: false,
+      shade: 'Media',
+      services: 'Ciclopuerto, bancas',
+      hours: '07:00 - 20:00'
     },
     {
       id: 'centro',
@@ -96,22 +120,109 @@ const HomeScreen = ({ navigation }) => {
       status: 'Disponible',
       distance: '1.8km',
       emergency: false,
-      recycle: true
+      recycle: true,
+      shade: 'Baja',
+      services: 'Bancas, sombra temporal',
+      hours: '06:00 - 23:00'
+    },
+    {
+      id: 'cerro-campana',
+      coordinate: { latitude: 29.0872, longitude: -110.9778 },
+      title: 'Cerro de la Campana',
+      description: 'Mirador con vegetacion',
+      temperature: 26,
+      status: 'Disponible',
+      distance: '2.1km',
+      emergency: true,
+      recycle: false,
+      shade: 'Media',
+      services: 'Mirador, ruta peatonal',
+      hours: '06:00 - 20:30'
+    },
+    {
+      id: 'la-sauceda',
+      coordinate: { latitude: 29.1036, longitude: -110.9469 },
+      title: 'La Sauceda',
+      description: 'Parque urbano fresco',
+      temperature: 25,
+      status: 'Disponible',
+      distance: '3.4km',
+      emergency: true,
+      recycle: true,
+      shade: 'Alta',
+      services: 'Bebederos, banos, arbolado',
+      hours: '05:00 - 22:00'
+    },
+    {
+      id: 'villa-seris',
+      coordinate: { latitude: 29.0518, longitude: -110.9488 },
+      title: 'Villa de Seris',
+      description: 'Andador verde barrial',
+      temperature: 28,
+      status: 'Disponible',
+      distance: '2.8km',
+      emergency: false,
+      recycle: true,
+      shade: 'Media',
+      services: 'Bancas, alumbrado led',
+      hours: '06:00 - 22:00'
+    },
+    {
+      id: 'parque-sonora',
+      coordinate: { latitude: 29.0941, longitude: -110.9312 },
+      title: 'Parque Sonora',
+      description: 'Corredor con sombra',
+      temperature: 27,
+      status: 'Alta demanda',
+      distance: '2.6km',
+      emergency: false,
+      recycle: true,
+      shade: 'Alta',
+      services: 'Ciclopista, bebederos',
+      hours: '05:30 - 21:00'
+    },
+    {
+      id: 'pitic-norte',
+      coordinate: { latitude: 29.1152, longitude: -110.9731 },
+      title: 'Pitic Norte',
+      description: 'Zona de descanso arbolada',
+      temperature: 26,
+      status: 'Disponible',
+      distance: '4.0km',
+      emergency: true,
+      recycle: false,
+      shade: 'Alta',
+      services: 'Bancas, punto de auxilio',
+      hours: '24 horas'
+    },
+    {
+      id: 'staus',
+      coordinate: { latitude: 29.0804, longitude: -110.9517 },
+      title: 'Andador STAUS',
+      description: 'Camino peatonal verde',
+      temperature: 29,
+      status: 'Disponible',
+      distance: '1.1km',
+      emergency: true,
+      recycle: true,
+      shade: 'Media',
+      services: 'Sombra, acceso universal',
+      hours: '06:00 - 21:00'
     }
   ];
 
   const currentZone = freshZones.find((zone) => zone.id === selectedZone) || null;
 
   const challengeMap = [
-    { id: 1, title: 'Espacio publico seguro ante calor extremo', screen: 'Movilidad', tag: 'Pregunta 1' },
-    { id: 2, title: 'Ahorro electrico en instalaciones deportivas', screen: 'Energia', tag: 'Pregunta 2' },
-    { id: 3, title: 'Reducir siniestros por celular al volante', screen: 'Seguridad', tag: 'Pregunta 3' },
-    { id: 4, title: 'Respeto a vehiculos de emergencia', screen: 'Seguridad', tag: 'Pregunta 4' },
-    { id: 5, title: 'Comunicacion oyentes - personas sordas (LSM)', screen: 'Inclusion', tag: 'Pregunta 5' },
-    { id: 6, title: 'IA para atraer inversiones y nearshoring', screen: 'Economia', tag: 'Pregunta 6' },
-    { id: 7, title: 'Estrategias de economia circular urbana', screen: 'Economia', tag: 'Pregunta 7' },
-    { id: 8, title: 'Pesaje y trazabilidad de residuos en tiempo real', screen: 'Economia', tag: 'Pregunta 8' },
-    { id: 9, title: 'Modelo colaborativo para participacion municipal', screen: 'Participacion', tag: 'Pregunta 9' },
+    { id: 1, title: 'Espacio publico seguro ante calor extremo', screen: 'Movilidad', tag: '1' },
+    { id: 2, title: 'Ahorro electrico en instalaciones deportivas', screen: 'Energia', tag: '2' },
+    { id: 3, title: 'Reducir siniestros por celular al volante', screen: 'Seguridad', tag: '3' },
+    { id: 4, title: 'Respeto a vehiculos de emergencia', screen: 'Seguridad', tag: '4' },
+    { id: 5, title: 'Comunicacion oyentes - personas sordas (LSM)', screen: 'Inclusion', tag: '5' },
+    { id: 6, title: 'IA para atraer inversiones y nearshoring', screen: 'Economia', tag: '6' },
+    { id: 7, title: 'Estrategias de economia circular urbana', screen: 'Economia', tag: '7' },
+    { id: 8, title: 'Pesaje y trazabilidad de residuos en tiempo real', screen: 'Economia', tag: '8' },
+    { id: 9, title: 'Modelo colaborativo para participacion municipal', screen: 'Participacion', tag: '9' },
   ];
 
   return (
@@ -227,7 +338,7 @@ const HomeScreen = ({ navigation }) => {
             )}
             <TouchableOpacity 
               style={styles.detailsButton}
-              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+              onPress={() => handleViewZoneDetails(currentZone)}
             >
               <Text style={styles.detailsButtonText}>Ver Detalles </Text>
               <Ionicons name="arrow-forward" size={14} color="#0066CC" />
@@ -296,8 +407,7 @@ const HomeScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.challengeSection}>
-          <Text style={styles.challengeTitle}>Mapa de Retos</Text>
-          <Text style={styles.challengeSubtitle}>Las 9 preguntas del reto conectadas a modulos funcionales</Text>
+          <Text style={styles.challengeTitle}>Acciones rapidas</Text>
           {challengeMap.map((challenge) => (
             <TouchableOpacity
               key={challenge.id}
@@ -370,7 +480,7 @@ const HomeScreen = ({ navigation }) => {
             ]}
           >
             <Text style={styles.statLabel}>Zonas Frescas</Text>
-            <Text style={styles.statValue}>14</Text>
+            <Text style={styles.statValue}>{freshZones.length}</Text>
             <Text style={styles.statUnit}>Activas</Text>
           </Animated.View>
         </View>
@@ -378,6 +488,78 @@ const HomeScreen = ({ navigation }) => {
         {/* Espacio extra */}
         <View style={styles.bottomSpace} />
       </ScrollView>
+
+      <Modal
+        visible={zoneModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={closeZoneModal}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleWrap}>
+                <View style={styles.modalLeafBadge}>
+                  <Ionicons name="leaf" size={18} color="white" />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>{detailZone?.title || 'Zona verde'}</Text>
+                  <Text style={styles.modalSubtitle}>{detailZone?.description || ''}</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={closeZoneModal} style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={20} color="#4a5568" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalTagRow}>
+              <View style={[styles.modalTag, { backgroundColor: '#e8f5e9' }]}>
+                <Ionicons name="thermometer" size={13} color="#2e7d32" />
+                <Text style={styles.modalTagText}>{detailZone?.temperature}C</Text>
+              </View>
+              <View style={[styles.modalTag, { backgroundColor: '#e3f2fd' }]}>
+                <Ionicons name="location" size={13} color="#1565c0" />
+                <Text style={styles.modalTagText}>{detailZone?.distance}</Text>
+              </View>
+              <View style={[styles.modalTag, { backgroundColor: '#fff3e0' }]}>
+                <Ionicons name="sunny" size={13} color="#ef6c00" />
+                <Text style={styles.modalTagText}>Sombra {detailZone?.shade}</Text>
+              </View>
+            </View>
+
+            <View style={styles.modalInfoList}>
+              <View style={styles.modalInfoRow}>
+                <Ionicons name="checkmark-circle" size={16} color="#2e7d32" />
+                <Text style={styles.modalInfoLabel}>Estado</Text>
+                <Text style={styles.modalInfoValue}>{detailZone?.status}</Text>
+              </View>
+              <View style={styles.modalInfoRow}>
+                <Ionicons name="construct" size={16} color="#5c6bc0" />
+                <Text style={styles.modalInfoLabel}>Servicios</Text>
+                <Text style={styles.modalInfoValue}>{detailZone?.services}</Text>
+              </View>
+              <View style={styles.modalInfoRow}>
+                <Ionicons name="time" size={16} color="#00897b" />
+                <Text style={styles.modalInfoLabel}>Horario</Text>
+                <Text style={styles.modalInfoValue}>{detailZone?.hours}</Text>
+              </View>
+              <View style={styles.modalInfoRow}>
+                <Ionicons
+                  name={detailZone?.emergency ? 'alert-circle' : 'shield-checkmark'}
+                  size={16}
+                  color={detailZone?.emergency ? '#d32f2f' : '#388e3c'}
+                />
+                <Text style={styles.modalInfoLabel}>Alerta</Text>
+                <Text style={styles.modalInfoValue}>{detailZone?.emergency ? 'Emergencia' : 'Normal'}</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.modalActionBtn} onPress={closeZoneModal}>
+              <Text style={styles.modalActionText}>Cerrar detalles</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -594,7 +776,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#1a237e',
-    marginBottom: 4,
+    marginBottom: 12,
   },
   challengeSubtitle: {
     fontSize: 12,
@@ -675,6 +857,117 @@ const styles = StyleSheet.create({
   },
   bottomSpace: { 
     height: 80 
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(12, 17, 29, 0.55)',
+    justifyContent: 'flex-end',
+    padding: 16,
+  },
+  modalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 22,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e8edf2',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  modalTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  modalLeafBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#2e7d32',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a237e',
+  },
+  modalSubtitle: {
+    marginTop: 2,
+    fontSize: 13,
+    color: '#607080',
+  },
+  modalCloseBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalTagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 14,
+  },
+  modalTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  modalTagText: {
+    marginLeft: 4,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  modalInfoList: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 14,
+    paddingVertical: 6,
+    marginBottom: 14,
+  },
+  modalInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  modalInfoLabel: {
+    marginLeft: 8,
+    fontSize: 13,
+    color: '#6b7280',
+    width: 70,
+  },
+  modalInfoValue: {
+    flex: 1,
+    fontSize: 13,
+    color: '#111827',
+    fontWeight: '600',
+  },
+  modalActionBtn: {
+    backgroundColor: '#1a237e',
+    borderRadius: 12,
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  modalActionText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
 

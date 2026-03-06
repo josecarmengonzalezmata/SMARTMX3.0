@@ -17,7 +17,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as Speech from "expo-speech";
 import { LinearGradient } from "expo-linear-gradient";
-import * as Animatable from "react-native-animatable";
+import { useIsFocused } from "@react-navigation/native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Hands } from "@mediapipe/hands";
 import * as cam from "@mediapipe/camera_utils";
@@ -30,17 +30,25 @@ import EconomicService from "../services/EconomicService";
 
 const { width } = Dimensions.get("window");
 const FRONT_CAMERA_TYPE = "front";
+const PHRASE_COOLDOWN_MS = 2000;
+const TRANSLATE_COOLDOWN_MS = 3000;
 
 export default function InclusionScreen() {
+  const isFocused = useIsFocused();
   const [text, setText] = useState("");
   const [translated, setTranslated] = useState("");
   const [isTranslating, setIsTranslating] = useState(false);
+  const [phraseCooldownUntil, setPhraseCooldownUntil] = useState(0);
+  const [phraseCooldownLeftMs, setPhraseCooldownLeftMs] = useState(0);
+  const [translateCooldownUntil, setTranslateCooldownUntil] = useState(0);
+  const [translateCooldownLeftMs, setTranslateCooldownLeftMs] = useState(0);
+  const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
 
   // Estados para cámara
   const [permission, requestPermission] = useCameraPermissions();
   const cameraPermission = permission?.granted ?? null;
   const [detectedSign, setDetectedSign] = useState(
-    "Presiona 'Iniciar Grabación' para detectar gestos en tiempo real",
+    "Toma una foto de la mano para analizar la sena.",
   );
   const cameraRef = useRef(null);
 
@@ -61,28 +69,14 @@ export default function InclusionScreen() {
     })();
   }, [requestPermission]);
 
-  // Simulate real-time gesture detection when recording
-  useEffect(() => {
-    if (!isRecording) return;
-
-    const interval = setInterval(() => {
-      const gestures = [
-        "Puño detectado",
-        "Like detectado",
-        "Dislike detectado",
-        "Signo de paz detectado",
-        "Seña desconocida",
-        "Ajusta la luz o posición",
-      ];
-      const randomGesture =
-        gestures[Math.floor(Math.random() * gestures.length)];
-      setDetectedSign(randomGesture);
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [isRecording]);
 
   const handleTranslate = () => {
+    const now = Date.now();
+    if (now < translateCooldownUntil) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
+
     if (!text.trim()) {
       Alert.alert("Atención", "Escribe una frase para traducir");
       return;
@@ -116,14 +110,17 @@ export default function InclusionScreen() {
 
     setTranslated(full);
 
-    Speech.speak(
-      "Traducción aproximada lista. Recuerda usar expresiones faciales y ser paciente.",
-      {
-        language: "es-MX",
-      },
-    );
+    if (isFocused) {
+      Speech.speak(
+        "Traducción aproximada lista. Recuerda usar expresiones faciales y ser paciente.",
+        {
+          language: "es-MX",
+        },
+      );
+    }
 
     setIsTranslating(false);
+    setTranslateCooldownUntil(now + TRANSLATE_COOLDOWN_MS);
   };
 
   const openGlossary = () => {
@@ -132,9 +129,79 @@ export default function InclusionScreen() {
   };
 
   const speakPhrase = (phrase) => {
+    if (!isFocused) return;
+
+    const now = Date.now();
+    if (now < phraseCooldownUntil) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Speech.speak(phrase.spanish, { language: "es-MX" });
+    setPhraseCooldownUntil(now + PHRASE_COOLDOWN_MS);
   };
+
+  useEffect(() => {
+    if (phraseCooldownUntil <= Date.now()) {
+      setPhraseCooldownLeftMs(0);
+      return;
+    }
+
+    const timer = setInterval(() => {
+      const left = Math.max(0, phraseCooldownUntil - Date.now());
+      setPhraseCooldownLeftMs(left);
+      if (left === 0) clearInterval(timer);
+    }, 100);
+
+    return () => clearInterval(timer);
+  }, [phraseCooldownUntil]);
+
+  useEffect(() => {
+    if (translateCooldownUntil <= Date.now()) {
+      setTranslateCooldownLeftMs(0);
+      return;
+    }
+
+    const timer = setInterval(() => {
+      const left = Math.max(0, translateCooldownUntil - Date.now());
+      setTranslateCooldownLeftMs(left);
+      if (left === 0) clearInterval(timer);
+    }, 100);
+
+    return () => clearInterval(timer);
+  }, [translateCooldownUntil]);
+
+  useEffect(() => {
+    if (!isFocused) {
+      Speech.stop();
+    }
+  }, [isFocused]);
+
+  const cooldownProgress =
+    phraseCooldownLeftMs > 0
+      ? Math.min(
+          100,
+          Math.max(
+            0,
+            ((PHRASE_COOLDOWN_MS - phraseCooldownLeftMs) / PHRASE_COOLDOWN_MS) *
+              100,
+          ),
+        )
+      : 100;
+
+  const translateCooldownProgress =
+    translateCooldownLeftMs > 0
+      ? Math.min(
+          100,
+          Math.max(
+            0,
+            ((TRANSLATE_COOLDOWN_MS - translateCooldownLeftMs) /
+              TRANSLATE_COOLDOWN_MS) *
+              100,
+          ),
+        )
+      : 100;
 
   // Define la función para limpiar el texto
   const clearText = () => {
@@ -143,41 +210,47 @@ export default function InclusionScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  // Add state to control recording and photo capture
-  const [isRecording, setIsRecording] = useState(false);
-
-  // Function to start/stop recording
-  const toggleRecording = async () => {
-    if (isRecording) {
-      setIsRecording(false);
-      setDetectedSign(
-        "Grabación detenida. Presiona 'Iniciar Grabación' para reanudar.",
-      );
-    } else {
-      setIsRecording(true);
-      setDetectedSign("Grabando... coloca tu mano");
-    }
-  };
-
   // Function to capture a photo and analyze it
   const capturePhoto = async () => {
-    if (cameraRef.current) {
-      const photo = await cameraRef.current.takePictureAsync();
-      setDetectedSign("Analizando foto...");
+    if (!cameraRef.current || isAnalyzingPhoto) return;
 
-      // Simulate analysis delay
-      setTimeout(() => {
-        const gestures = [
-          "Puño detectado",
-          "Like detectado",
-          "Dislike detectado",
-          "Signo de paz detectado",
-          "Seña desconocida",
-        ];
-        const randomGesture =
-          gestures[Math.floor(Math.random() * gestures.length)];
-        setDetectedSign(`Gesto detectado: ${randomGesture}`);
-      }, 2000); // Simulate 2 seconds analysis
+    try {
+      setIsAnalyzingPhoto(true);
+      setDetectedSign("Analizando foto con IA...");
+
+      const photo = await cameraRef.current.takePictureAsync({
+        base64: true,
+        quality: 0.6,
+        skipProcessing: true,
+      });
+
+      if (!photo?.base64) {
+        setDetectedSign(
+          "No se pudo leer la foto. Intenta de nuevo con mejor iluminacion.",
+        );
+        return;
+      }
+
+      const analysis = await EconomicService.analyzeSignFromPhoto(photo.base64);
+      const confidenceText = `${analysis.confidence}%`;
+      const prefix = analysis.uncertain ? "Posible seña" : "Seña detectada";
+
+      setDetectedSign(
+        `${prefix}: ${analysis.sign} (${confidenceText})\n` +
+          `Significado: ${analysis.meaning}\n` +
+          `Sugerencia: ${analysis.recommendation}`,
+      );
+    } catch (error) {
+      console.log("Error analizando foto de seña:", error);
+      const detail = String(error?.message || "").slice(0, 140);
+      setDetectedSign(
+        "No se pudo analizar la foto. " +
+          (detail
+            ? `Detalle: ${detail}`
+            : "Revisa conexion, permisos y vuelve a intentar."),
+      );
+    } finally {
+      setIsAnalyzingPhoto(false);
     }
   };
 
@@ -192,7 +265,7 @@ export default function InclusionScreen() {
           end={{ x: 1, y: 1 }}
           style={styles.header}
         >
-          <Animatable.View animation="bounceIn" duration={1500}>
+          <View>
             <View style={styles.iconCircle}>
               <MaterialCommunityIcons
                 name="hands-pray"
@@ -200,29 +273,17 @@ export default function InclusionScreen() {
                 color="#1a237e"
               />
             </View>
-          </Animatable.View>
-          <Animatable.Text
-            animation="fadeInUp"
-            delay={300}
-            style={styles.headerTitle}
-          >
+          </View>
+          <Text style={styles.headerTitle}>
             Comunicación Inclusiva
-          </Animatable.Text>
-          <Animatable.Text
-            animation="fadeInUp"
-            delay={500}
-            style={styles.headerSubtitle}
-          >
+          </Text>
+          <Text style={styles.headerSubtitle}>
             Traductor Español ↔ LSM
-          </Animatable.Text>
+          </Text>
         </LinearGradient>
 
         {/* Traductor */}
-        <Animatable.View
-          animation="fadeInUp"
-          delay={200}
-          style={styles.section}
-        >
+        <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialCommunityIcons
               name="translate"
@@ -247,10 +308,11 @@ export default function InclusionScreen() {
               <TouchableOpacity
                 style={[
                   styles.translateButton,
-                  isTranslating && styles.disabledButton,
+                  (isTranslating || translateCooldownLeftMs > 0) &&
+                    styles.disabledButton,
                 ]}
                 onPress={handleTranslate}
-                disabled={isTranslating}
+                disabled={isTranslating || translateCooldownLeftMs > 0}
                 activeOpacity={0.8}
               >
                 <LinearGradient
@@ -275,12 +337,28 @@ export default function InclusionScreen() {
               </TouchableOpacity>
             </View>
 
+            {translateCooldownLeftMs > 0 && (
+              <View style={styles.cooldownCard}>
+                <View style={styles.cooldownHeader}>
+                  <Ionicons name="hourglass-outline" size={16} color="#b45309" />
+                  <Text style={styles.cooldownTitle}>Cooldown de traduccion</Text>
+                  <Text style={styles.cooldownTime}>
+                    {(translateCooldownLeftMs / 1000).toFixed(1)}s
+                  </Text>
+                </View>
+                <View style={styles.cooldownTrack}>
+                  <View
+                    style={[
+                      styles.cooldownFill,
+                      { width: `${translateCooldownProgress}%` },
+                    ]}
+                  />
+                </View>
+              </View>
+            )}
+
             {translated ? (
-              <Animatable.View
-                animation="fadeIn"
-                duration={500}
-                style={styles.resultBox}
-              >
+              <View style={styles.resultBox}>
                 <View style={styles.resultHeader}>
                   <MaterialCommunityIcons
                     name="hand-peace"
@@ -290,7 +368,7 @@ export default function InclusionScreen() {
                   <Text style={styles.resultHeaderText}>Resultado:</Text>
                 </View>
                 <Text style={styles.resultText}>{translated}</Text>
-              </Animatable.View>
+              </View>
             ) : null}
 
             <TouchableOpacity
@@ -312,31 +390,41 @@ export default function InclusionScreen() {
               </LinearGradient>
             </TouchableOpacity>
           </View>
-        </Animatable.View>
+        </View>
 
         {/* Frases Comunes */}
-        <Animatable.View
-          animation="fadeInUp"
-          delay={300}
-          style={styles.section}
-        >
+        <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialCommunityIcons name="chat" size={24} color="#1a237e" />
             <Text style={styles.sectionTitle}>Frases Comunes</Text>
           </View>
+          {phraseCooldownLeftMs > 0 && (
+            <View style={styles.cooldownCard}>
+              <View style={styles.cooldownHeader}>
+                <Ionicons name="timer-outline" size={16} color="#b45309" />
+                <Text style={styles.cooldownTitle}>Cooldown de reproduccion</Text>
+                <Text style={styles.cooldownTime}>
+                  {(phraseCooldownLeftMs / 1000).toFixed(1)}s
+                </Text>
+              </View>
+              <View style={styles.cooldownTrack}>
+                <View
+                  style={[styles.cooldownFill, { width: `${cooldownProgress}%` }]}
+                />
+              </View>
+            </View>
+          )}
 
           <View style={styles.phrasesGrid}>
             {commonPhrases.map((phrase, index) => (
-              <Animatable.View
-                key={index}
-                animation="fadeInUp"
-                delay={400 + index * 100}
-                style={styles.phraseCardWrapper}
-              >
-                //Holaaaaa-
+              <View key={index} style={styles.phraseCardWrapper}>
                 <TouchableOpacity
-                  style={styles.phraseCard}
+                  style={[
+                    styles.phraseCard,
+                    phraseCooldownLeftMs > 0 && styles.phraseCardDisabled,
+                  ]}
                   onPress={() => speakPhrase(phrase)}
+                  disabled={phraseCooldownLeftMs > 0}
                   activeOpacity={0.7}
                 >
                   <View style={styles.phraseHeader}>
@@ -352,17 +440,13 @@ export default function InclusionScreen() {
                   <Text style={styles.phraseSpanish}>{phrase.spanish}</Text>
                   <Text style={styles.phraseDesc}>{phrase.desc}</Text>
                 </TouchableOpacity>
-              </Animatable.View>
+              </View>
             ))}
           </View>
-        </Animatable.View>
+        </View>
 
         {/* Consejos */}
-        <Animatable.View
-          animation="fadeInUp"
-          delay={500}
-          style={styles.section}
-        >
+        <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialCommunityIcons
               name="lightbulb-on"
@@ -373,12 +457,7 @@ export default function InclusionScreen() {
           </View>
 
           {tips.map((tip, index) => (
-            <Animatable.View
-              key={index}
-              animation="fadeInLeft"
-              delay={600 + index * 150}
-              style={styles.tipCard}
-            >
+            <View key={index} style={styles.tipCard}>
               <LinearGradient
                 colors={["#f5f5f5", "#ffffff"]}
                 style={styles.tipGradient}
@@ -388,16 +467,12 @@ export default function InclusionScreen() {
                 </View>
                 <Text style={styles.tipText}>{tip.text}</Text>
               </LinearGradient>
-            </Animatable.View>
+            </View>
           ))}
-        </Animatable.View>
+        </View>
 
         {/* Estadísticas */}
-        <Animatable.View
-          animation="fadeInUp"
-          delay={700}
-          style={styles.statsCard}
-        >
+        <View style={styles.statsCard}>
           <LinearGradient
             colors={["#ffffff", "#f8f9fa"]}
             style={styles.statsGradient}
@@ -423,14 +498,10 @@ export default function InclusionScreen() {
               </View>
             </View>
           </LinearGradient>
-        </Animatable.View>
+        </View>
 
         {/* Reconocimiento con Cámara */}
-        <Animatable.View
-          animation="fadeInUp"
-          delay={800}
-          style={styles.section}
-        >
+        <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialCommunityIcons
               name="hand-wave"
@@ -471,24 +542,21 @@ export default function InclusionScreen() {
               <Text style={styles.detectedSign}>{detectedSign}</Text>
               <View style={styles.cameraControls}>
                 <TouchableOpacity
-                  onPress={toggleRecording}
-                  style={styles.controlButton}
+                  onPress={capturePhoto}
+                  style={[
+                    styles.controlButton,
+                    isAnalyzingPhoto && styles.controlButtonDisabled,
+                  ]}
+                  disabled={isAnalyzingPhoto}
                 >
                   <Text style={styles.controlButtonText}>
-                    {isRecording ? "Detener Grabación" : "Iniciar Grabación"}
+                    {isAnalyzingPhoto ? "Analizando..." : "Tomar Foto"}
                   </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={capturePhoto}
-                  style={styles.controlButton}
-                >
-                  <Text style={styles.controlButtonText}>Tomar Foto</Text>
                 </TouchableOpacity>
               </View>
             </View>
           )}
-        </Animatable.View>
+        </View>
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -671,6 +739,41 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     justifyContent: "flex-start",
   },
+  cooldownCard: {
+    backgroundColor: "#fff7ed",
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 12,
+  },
+  cooldownHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  cooldownTitle: {
+    marginLeft: 6,
+    fontSize: 12,
+    color: "#9a3412",
+    fontWeight: "700",
+    flex: 1,
+  },
+  cooldownTime: {
+    fontSize: 12,
+    color: "#c2410c",
+    fontWeight: "700",
+  },
+  cooldownTrack: {
+    height: 8,
+    borderRadius: 999,
+    overflow: "hidden",
+    backgroundColor: "#fde68a",
+  },
+  cooldownFill: {
+    height: "100%",
+    backgroundColor: "#f59e0b",
+  },
   phraseCardWrapper: {
     width: "100%",
     marginBottom: 18,
@@ -684,6 +787,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
+  },
+  phraseCardDisabled: {
+    opacity: 0.6,
   },
   phraseHeader: {
     flexDirection: "row",
@@ -869,6 +975,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
+  },
+  controlButtonDisabled: {
+    backgroundColor: "#94a3b8",
   },
   controlButtonText: {
     color: "white",

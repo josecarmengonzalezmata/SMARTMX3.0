@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const { width, height } = Dimensions.get('window');
 
 export default function SeguridadScreen() {
+  const idCounterRef = useRef(0);
+
+  const createUniqueId = () => {
+    idCounterRef.current += 1;
+    return `${Date.now()}-${idCounterRef.current}`;
+  };
+
   // Estados para Pregunta 3 (Prevención de accidentes)
   const [modoConduccion, setModoConduccion] = useState(false);
   const [velocidad, setVelocidad] = useState(0);
@@ -58,7 +65,14 @@ export default function SeguridadScreen() {
       if (viajesGuardados) setViajesHoy(parseInt(viajesGuardados));
 
       const alertasGuardadas = await AsyncStorage.getItem('alertas');
-      if (alertasGuardadas) setAlertas(JSON.parse(alertasGuardadas));
+      if (alertasGuardadas) {
+        const parsedAlerts = JSON.parse(alertasGuardadas);
+        const normalizedAlerts = (parsedAlerts || []).map((item, index) => ({
+          ...item,
+          id: `${item?.id ?? 'legacy'}-${index}`,
+        }));
+        setAlertas(normalizedAlerts);
+      }
     } catch (error) {
       console.log('Error cargando datos:', error);
     }
@@ -98,7 +112,7 @@ export default function SeguridadScreen() {
           // Activar modo conducción automático si va rápido
           if (vel > 10 && !modoConduccion) {
             setModoConduccion(true);
-            agregarAlerta('🚗 Modo conducción activado automáticamente');
+            agregarAlerta('Modo conduccion activado automaticamente');
           }
         }
       );
@@ -114,14 +128,14 @@ export default function SeguridadScreen() {
     Vibration.vibrate(1000);
     
     Alert.alert(
-      '🚨 ¡ALERTA DE IMPACTO!',
+      'ALERTA DE IMPACTO',
       `Se detectó un impacto de ${fuerza.toFixed(1)}G. ¿Necesitas ayuda?`,
       [
-        { text: 'Estoy bien', onPress: () => agregarAlerta('✅ Falso positivo reportado') },
+        { text: 'Estoy bien', onPress: () => agregarAlerta('Falso positivo reportado') },
         {
-          text: '🚑 LLAMAR EMERGENCIAS',
+          text: 'LLAMAR EMERGENCIAS',
           onPress: () => {
-            agregarAlerta('🚨 EMERGENCIA REPORTADA - Servicios notificados');
+            agregarAlerta('EMERGENCIA REPORTADA - Servicios notificados');
             Alert.alert('Emergencia reportada', 'Se ha notificado a los servicios de emergencia con tu ubicación');
           },
           style: 'destructive'
@@ -129,14 +143,14 @@ export default function SeguridadScreen() {
       ]
     );
 
-    agregarAlerta(`⚠️ Impacto detectado: ${fuerza.toFixed(1)}G`);
+    agregarAlerta(`Impacto detectado: ${fuerza.toFixed(1)}G`);
     setPuntuacion(prev => Math.max(0, prev - 15));
     guardarDatos();
   };
 
   const agregarAlerta = (mensaje) => {
     const nuevaAlerta = {
-      id: Date.now(),
+      id: createUniqueId(),
       mensaje,
       tiempo: 'Ahora',
       timestamp: new Date().toISOString()
@@ -150,9 +164,9 @@ export default function SeguridadScreen() {
     setModoConduccion(!modoConduccion);
     if (!modoConduccion) {
       setViajesHoy(prev => prev + 1);
-      agregarAlerta('🟢 Modo conducción activado');
+      agregarAlerta('Modo conduccion activado');
     } else {
-      agregarAlerta('🔴 Modo conducción desactivado');
+      agregarAlerta('Modo conduccion desactivado');
     }
     guardarDatos();
   };
@@ -181,7 +195,7 @@ export default function SeguridadScreen() {
         tiempo: '2 min', 
         via: 'Av. Tecnológico',
         color: '#dc3545',
-        icon: 'ambulance'
+        icon: 'medical'
       },
       { 
         id: 2, 
@@ -229,7 +243,7 @@ export default function SeguridadScreen() {
             };
             
             const nuevoReporte = {
-              id: Date.now(),
+              id: createUniqueId(),
               usuario: 'Tú',
               tipo: nombres[tipo],
               ubicacion: 'Ubicación actual',
@@ -237,9 +251,9 @@ export default function SeguridadScreen() {
               confianza: 100
             };
             
-            setReportesUsuario([nuevoReporte, ...reportesUsuario].slice(0, 10));
+            setReportesUsuario(prev => [nuevoReporte, ...prev].slice(0, 10));
             Vibration.vibrate(200);
-            agregarAlerta(`📢 Reportaste ${nombres[tipo]} cerca`);
+            agregarAlerta(`Reportaste ${nombres[tipo]} cerca`);
             
             Alert.alert('¡Gracias por reportar!', 'Tu reporte ayuda a otros conductores');
           }
@@ -251,9 +265,9 @@ export default function SeguridadScreen() {
   // Guía de señales de emergencia
   const guiaEmergencias = [
     { 
-      icon: 'ambulance',
+      icon: 'medical',
       tipo: 'Ambulancia', 
-      sonido: '🚨 Sirena intermitente',
+      sonido: 'Sirena intermitente',
       accion: 'Despeje carril derecho INMEDIATAMENTE',
       color: '#dc3545',
       multa: '$5,000 MXN'
@@ -261,7 +275,7 @@ export default function SeguridadScreen() {
     { 
       icon: 'car-sport',
       tipo: 'Patrulla', 
-      sonido: '🔊 Sirena continua',
+      sonido: 'Sirena continua',
       accion: 'Reduzca velocidad y oríllese a la derecha',
       color: '#1a237e',
       multa: '$3,000 MXN'
@@ -269,7 +283,7 @@ export default function SeguridadScreen() {
     { 
       icon: 'flame',
       tipo: 'Bomberos', 
-      sonido: '🎵 Dos tonos alternados',
+      sonido: 'Dos tonos alternados',
       accion: 'ALTO TOTAL, ceda el paso completamente',
       color: '#ff6b35',
       multa: '$4,000 MXN'
@@ -322,7 +336,7 @@ export default function SeguridadScreen() {
               <Text style={styles.sectionTitle}>Prevención de Accidentes</Text>
             </View>
             <View style={styles.sectionBadge}>
-              <Text style={styles.sectionBadgeText}>Pregunta 3</Text>
+              <Text style={styles.sectionBadgeText}>3</Text>
             </View>
           </View>
           
@@ -423,7 +437,7 @@ export default function SeguridadScreen() {
               <Text style={styles.sectionTitle}>Vehículos de Emergencia</Text>
             </View>
             <View style={styles.sectionBadge}>
-              <Text style={styles.sectionBadgeText}>Pregunta 4</Text>
+              <Text style={styles.sectionBadgeText}>4</Text>
             </View>
           </View>
 
@@ -435,7 +449,7 @@ export default function SeguridadScreen() {
               onPress={() => reportarEmergencia('ambulance')}
               activeOpacity={0.8}
             >
-              <Ionicons name="ambulance" size={width * 0.08} color="white" />
+              <Ionicons name="medical" size={width * 0.08} color="white" />
               <Text style={styles.reporteBtnText}>Ambulancia</Text>
             </TouchableOpacity>
             
@@ -460,7 +474,10 @@ export default function SeguridadScreen() {
 
           {/* Emergencias cercanas en tiempo real */}
           <View style={styles.emergenciasHeader}>
-            <Text style={styles.subSectionTitle}>🚨 Emergencias cercanas</Text>
+            <View style={styles.titleWithIcon}>
+              <Ionicons name="alert" size={18} color="#dc3545" />
+              <Text style={styles.subSectionTitle}>Emergencias cercanas</Text>
+            </View>
             <Text style={styles.actualizacionText}>
               Actualizado {ultimaActualizacion.toLocaleTimeString()}
             </Text>
@@ -493,9 +510,12 @@ export default function SeguridadScreen() {
           ))}
 
           {/* Reportes de la comunidad */}
-          <Text style={[styles.subSectionTitle, { marginTop: 20 }]}>
-            👥 Reportes de la comunidad ({reportesUsuario.length})
-          </Text>
+          <View style={[styles.titleWithIcon, { marginTop: 20 }]}>
+            <Ionicons name="people" size={18} color="#1a237e" />
+            <Text style={styles.subSectionTitle}>
+              Reportes de la comunidad ({reportesUsuario.length})
+            </Text>
+          </View>
           
           {reportesUsuario.map(reporte => (
             <View key={reporte.id} style={styles.reporteCard}>
@@ -515,7 +535,10 @@ export default function SeguridadScreen() {
 
           {/* Guía rápida de señales */}
           <View style={styles.guiaContainer}>
-            <Text style={styles.guiaTitulo}>📢 Guía rápida de señales</Text>
+            <View style={styles.titleWithIcon}>
+              <Ionicons name="megaphone" size={18} color="#1a237e" />
+              <Text style={styles.guiaTitulo}>Guia rapida de senales</Text>
+            </View>
             <Text style={styles.guiaSubtitulo}>Aprende a reaccionar ante cada emergencia</Text>
             
             {guiaEmergencias.map((item, index) => (
@@ -527,8 +550,8 @@ export default function SeguridadScreen() {
                     <Text style={[styles.guiaTipo, { color: item.color }]}>{item.tipo}</Text>
                   </View>
                   <Text style={styles.guiaSonido}>{item.sonido}</Text>
-                  <Text style={styles.guiaAccion}>➡️ {item.accion}</Text>
-                  <Text style={styles.guiaMulta}>🚫 Multa por no ceder: {item.multa}</Text>
+                  <Text style={styles.guiaAccion}>Accion: {item.accion}</Text>
+                  <Text style={styles.guiaMulta}>Multa por no ceder: {item.multa}</Text>
                 </View>
               </View>
             ))}
@@ -565,9 +588,16 @@ export default function SeguridadScreen() {
         {/* Versión y última sincronización */}
         <View style={styles.versionContainer}>
           <Text style={styles.versionText}>Smart MX v1.0 - Seguridad Vial</Text>
-          <Text style={styles.syncText}>
-            {Platform.OS === 'ios' ? '📱 iOS' : '🤖 Android'} · Datos locales
-          </Text>
+          <View style={styles.syncRow}>
+            <Ionicons
+              name={Platform.OS === 'ios' ? 'phone-portrait' : 'logo-android'}
+              size={14}
+              color="#ccc"
+            />
+            <Text style={styles.syncText}>
+              {Platform.OS === 'ios' ? 'iOS' : 'Android'} · Datos locales
+            </Text>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -1085,9 +1115,19 @@ const styles = StyleSheet.create({
     fontSize: width * 0.03,
     color: '#999',
   },
+  syncRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   syncText: {
     fontSize: width * 0.025,
     color: '#ccc',
     marginTop: 2,
+  },
+  titleWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
 });

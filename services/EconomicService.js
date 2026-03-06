@@ -94,6 +94,146 @@ async function askGroq(systemPrompt, userContent) {
   return JSON.parse(text);
 }
 
+async function askGroqVision(systemPrompt, userText, imageDataUrl) {
+  if (!GROQ_API_KEY) {
+    throw new Error("Falta EXPO_PUBLIC_GROQ_API_KEY en tu .env");
+  }
+
+  var VISION_MODELS = [
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "meta-llama/llama-4-maverick-17b-128e-instruct",
+  ];
+
+  var lastError = null;
+
+  function tryParseJsonFromText(rawText) {
+    var clean = String(rawText || "")
+      .replace(/```json\n?/g, "")
+      .replace(/```\n?/g, "")
+      .trim();
+
+    try {
+      return JSON.parse(clean);
+    } catch (e) {
+      var start = clean.indexOf("{");
+      var end = clean.lastIndexOf("}");
+      if (start !== -1 && end !== -1 && end > start) {
+        return JSON.parse(clean.slice(start, end + 1));
+      }
+      throw e;
+    }
+  }
+
+  for (var i = 0; i < VISION_MODELS.length; i++) {
+    var model = VISION_MODELS[i];
+
+    try {
+      var payloads = [
+        {
+          model: model,
+          temperature: 0.2,
+          max_tokens: 600,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: systemPrompt },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: userText },
+                { type: "image_url", image_url: { url: imageDataUrl } },
+              ],
+            },
+          ],
+        },
+        {
+          model: model,
+          temperature: 0.2,
+          max_tokens: 600,
+          messages: [
+            { role: "system", content: systemPrompt },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: userText },
+                { type: "image_url", image_url: { url: imageDataUrl } },
+              ],
+            },
+          ],
+        },
+      ];
+
+      for (var p = 0; p < payloads.length; p++) {
+        var response = await fetch(GROQ_ENDPOINT, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + GROQ_API_KEY,
+          },
+          body: JSON.stringify(payloads[p]),
+        });
+
+        if (!response.ok) {
+          var err = await response.text();
+          throw new Error(model + " -> " + response.status + ": " + err);
+        }
+
+        var json = await response.json();
+        var text = json?.choices?.[0]?.message?.content;
+        return tryParseJsonFromText(text);
+      }
+    } catch (e) {
+      lastError = e;
+    }
+  }
+
+  throw new Error(
+    "Fallo el analisis de vision con modelos disponibles. " +
+      (lastError ? lastError.message : "Sin detalle"),
+  );
+}
+
+async function analyzeSignFromPhoto(base64Image) {
+  if (!base64Image) {
+    throw new Error("No se recibio imagen para analizar");
+  }
+
+  var system = [
+    "Eres un asistente experto en Lengua de Senas Mexicana (LSM).",
+    "Debes analizar UNA foto de mano/sena y dar una prediccion prudente.",
+    "Si no hay suficiente evidencia, responde como incierto.",
+    "Devuelve UNICAMENTE JSON valido con este esquema:",
+    "{",
+    '  "sign": "nombre corto",',
+    '  "confidence": 0,',
+    '  "meaning": "significado corto",',
+    '  "recommendation": "como mejorar foto/angulo/luz",',
+    '  "uncertain": true',
+    "}",
+    "confidence debe ser entero 0-100.",
+  ].join("\n");
+
+  var userText = [
+    "Analiza esta foto y detecta la sena mas probable.",
+    "Contexto: app educativa de inclusion, resultado breve y claro.",
+  ].join("\n");
+
+  var dataUrl = "data:image/jpeg;base64," + base64Image;
+  var result = await askGroqVision(system, userText, dataUrl);
+
+  return {
+    sign: result.sign || "Seña no identificada",
+    confidence:
+      typeof result.confidence === "number"
+        ? Math.max(0, Math.min(100, Math.round(result.confidence)))
+        : 0,
+    meaning: result.meaning || "No se pudo determinar con certeza",
+    recommendation:
+      result.recommendation ||
+      "Intenta con mejor iluminacion y la mano centrada.",
+    uncertain: Boolean(result.uncertain),
+  };
+}
+
 // ─── 1. BANCO MUNDIAL — indicadores macro México ──────────────────────────────
 async function fetchWorldBankData() {
   var cached = await cacheGet("worldbank");
@@ -461,6 +601,7 @@ var EconomicService = {
   getCitiesWithAI: getCitiesWithAI,
   getCircularEconomyWithAI: getCircularEconomyWithAI,
   getNearshoringWithAI: getNearshoringWithAI,
+  analyzeSignFromPhoto: analyzeSignFromPhoto,
   clearCache: clearCache,
   askGroq: askGroq,
 };

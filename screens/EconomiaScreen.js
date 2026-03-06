@@ -1020,9 +1020,7 @@ export default function EconomiaScreen() {
                   { backgroundColor: BLUE + "20", borderColor: BLUE + "50" },
                 ]}
               >
-                <Text style={[s.questionTagText, { color: BLUE }]}>
-                  Pregunta 6
-                </Text>
+                <Text style={[s.questionTagText, { color: BLUE }]}>6</Text>
               </View>
             </View>
 
@@ -1205,9 +1203,7 @@ export default function EconomiaScreen() {
                   { backgroundColor: GREEN + "20", borderColor: GREEN + "50" },
                 ]}
               >
-                <Text style={[s.questionTagText, { color: GREEN }]}>
-                  Pregunta 7
-                </Text>
+                <Text style={[s.questionTagText, { color: GREEN }]}>7</Text>
               </View>
               <View
                 style={[
@@ -1218,9 +1214,7 @@ export default function EconomiaScreen() {
                   },
                 ]}
               >
-                <Text style={[s.questionTagText, { color: ORANGE }]}>
-                  Pregunta 8
-                </Text>
+                <Text style={[s.questionTagText, { color: ORANGE }]}>8</Text>
               </View>
             </View>
 

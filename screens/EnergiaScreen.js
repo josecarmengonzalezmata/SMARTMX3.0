@@ -1,5 +1,5 @@
 // screens/EnergiaScreen.js
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 
 const EnergiaScreen = () => {
+  const idCounterRef = useRef(0);
+  const createUniqueId = () => {
+    idCounterRef.current += 1;
+    return `${Date.now()}-${idCounterRef.current}`;
+  };
+
   const [selectedGym, setSelectedGym] = useState(null);
   const [selectedMachine, setSelectedMachine] = useState(null);
   const [exerciseMinutes, setExerciseMinutes] = useState('');
@@ -296,7 +302,7 @@ const EnergiaScreen = () => {
     setGeneratedEnergy(energy);
 
     const newEntry = {
-      id: Date.now(),
+      id: createUniqueId(),
       machine: selectedMachine.type,
       machineNumber: selectedMachine.machineNumber,
       minutes: minutes,
@@ -306,7 +312,7 @@ const EnergiaScreen = () => {
       gym: selectedGym.name
     };
 
-    setUserHistory([newEntry, ...userHistory]);
+    setUserHistory((prev) => [newEntry, ...prev]);
     setModalVisible(false);
     setExerciseMinutes('');
 
@@ -410,7 +416,7 @@ const EnergiaScreen = () => {
         <Text style={styles.headerTitle}>Energia Deportiva</Text>
         <Text style={styles.headerSubtitle}>Hermosillo, Sonora</Text>
         <View style={styles.challengeBadge}>
-          <Text style={styles.challengeBadgeText}>Pregunta 2: ahorro electrico + iluminacion inteligente</Text>
+          <Text style={styles.challengeBadgeText}>2: ahorro electrico + iluminacion inteligente</Text>
         </View>
       </View>
 
